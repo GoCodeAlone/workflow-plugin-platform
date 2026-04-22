@@ -8,6 +8,12 @@ import (
 	sdk "github.com/GoCodeAlone/workflow/plugin/external/sdk"
 )
 
+// Version is set at build time via -ldflags
+// "-X github.com/GoCodeAlone/workflow-plugin-platform/internal.Version=X.Y.Z".
+// Default is a bare semver so plugin loaders that validate semver accept
+// unreleased dev builds; goreleaser overrides with the real release tag.
+var Version = "0.0.0"
+
 // platformPlugin implements sdk.PluginProvider.
 type platformPlugin struct{}
 
@@ -20,7 +26,7 @@ func NewPlatformPlugin() sdk.PluginProvider {
 func (p *platformPlugin) Manifest() sdk.PluginManifest {
 	return sdk.PluginManifest{
 		Name:        "workflow-plugin-platform",
-		Version:     "0.1.0",
+		Version:     Version,
 		Author:      "GoCodeAlone",
 		Description: "Platform infrastructure modules: Kubernetes, ECS, DNS, networking, API gateway, autoscaling, multi-region, DigitalOcean, iac.state, app.container",
 	}
