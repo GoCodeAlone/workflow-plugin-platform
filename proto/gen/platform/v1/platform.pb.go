@@ -3780,7 +3780,7 @@ const file_platform_v1_platform_proto_rawDesc = "" +
 	"\x06status\x18\x01 \x01(\tR\x06status\x12#\n" +
 	"\rdeployment_id\x18\x02 \x01(\tR\fdeploymentId\x12\x18\n" +
 	"\amessage\x18\x03 \x01(\tR\amessage\x12\x12\n" +
-	"\x04logs\x18\x04 \x03(\tR\x04logsBNZLgithub.com/GoCodeAlone/workflow-plugin-platform/proto/platform/v1;platformv1b\x06proto3"
+	"\x04logs\x18\x04 \x03(\tR\x04logsBRZPgithub.com/GoCodeAlone/workflow-plugin-platform/proto/gen/platform/v1;platformv1b\x06proto3"
 
 var (
 	file_platform_v1_platform_proto_rawDescOnce sync.Once

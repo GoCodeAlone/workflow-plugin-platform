@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package workflow.plugins.platform.v1;
 
-option go_package = "github.com/GoCodeAlone/workflow-plugin-platform/proto/platform/v1;platformv1";
+option go_package = "github.com/GoCodeAlone/workflow-plugin-platform/proto/gen/platform/v1;platformv1";
 
 // ─── Module config messages ───────────────────────────────────────────────────
 

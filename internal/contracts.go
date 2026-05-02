@@ -2,11 +2,14 @@ package internal
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	pb "github.com/GoCodeAlone/workflow/plugin/external/proto"
 	sdk "github.com/GoCodeAlone/workflow/plugin/external/sdk"
 	platformv1 "github.com/GoCodeAlone/workflow-plugin-platform/proto/gen/platform/v1"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protodesc"
 	"google.golang.org/protobuf/reflect/protoregistry"
 	"google.golang.org/protobuf/types/descriptorpb"
@@ -17,6 +20,11 @@ import (
 // It returns strict proto-backed contract descriptors for every advertised module
 // and step type and embeds the platform proto FileDescriptorSet so the host can
 // perform dynamic encoding/decoding without a separate protoc run.
+//
+// NOTE: The same descriptor data is also written to plugin.contracts.json for
+// offline wfctl validation (wfctl plugin validate --strict-contracts). Both
+// sources must be kept in sync; add entries to both when introducing new
+// module or step types.
 func (p *platformPlugin) ContractRegistry() *pb.ContractRegistry {
 	fds := platformFileDescriptorSet()
 	contracts := []*pb.ContractDescriptor{
@@ -124,11 +132,17 @@ func (p *platformPlugin) ContractRegistry() *pb.ContractRegistry {
 
 // platformFileDescriptorSet returns a FileDescriptorSet containing the
 // platform proto definitions so the host can dynamically encode/decode messages.
+// It panics if the descriptor is not registered, which indicates a broken build
+// (the generated pb.go file must register it at init time).
 func platformFileDescriptorSet() *descriptorpb.FileDescriptorSet {
 	file, err := protoregistry.GlobalFiles.FindFileByPath("platform/v1/platform.proto")
 	if err != nil {
-		// Should never happen: the generated pb.go file registers the descriptor.
-		return &descriptorpb.FileDescriptorSet{}
+		// This should never happen: protoc-generated code registers the file
+		// descriptor in its init() function. A missing descriptor means the
+		// generated pb.go was not compiled into the binary — fail loudly so
+		// the misconfiguration is caught at startup rather than silently
+		// serving an incomplete contract registry.
+		panic(fmt.Sprintf("platform plugin: proto descriptor not registered (platform/v1/platform.proto): %v", err))
 	}
 	return &descriptorpb.FileDescriptorSet{
 		File: []*descriptorpb.FileDescriptorProto{protodesc.ToFileDescriptorProto(file)},
@@ -251,6 +265,23 @@ func doCIO() cio {
 	}
 }
 
+// protoToMap converts a proto.Message to a map[string]any using protojson so
+// typed module configs can be forwarded to the existing map-based constructors.
+func protoToMap(msg proto.Message) map[string]any {
+	if msg == nil {
+		return nil
+	}
+	b, err := protojson.Marshal(msg)
+	if err != nil {
+		return nil
+	}
+	var m map[string]any
+	if err := json.Unmarshal(b, &m); err != nil {
+		return nil
+	}
+	return m
+}
+
 // ── TypedModuleProvider ───────────────────────────────────────────────────────
 
 // TypedModuleTypes returns the module type names that support strict typed config.
@@ -259,104 +290,105 @@ func (p *platformPlugin) TypedModuleTypes() []string {
 }
 
 // CreateTypedModule creates a typed module using the strict proto config.
-// It falls back to the generic module implementation while preserving the
-// typed config interface for the host.
+// The decoded proto config is converted to the map[string]any form that the
+// existing module constructors expect, ensuring typed and legacy paths behave
+// identically while the real provisioning logic is still a stub (TODO).
 func (p *platformPlugin) CreateTypedModule(typeName, name string, config *anypb.Any) (sdk.ModuleInstance, error) {
 	switch typeName {
 	case "platform.kubernetes":
 		return sdk.NewTypedModuleFactory(typeName, &platformv1.KubernetesConfig{},
-			func(n string, _ *platformv1.KubernetesConfig) (sdk.ModuleInstance, error) {
-				return newGenericModule(n, typeName, nil), nil
+			func(n string, cfg *platformv1.KubernetesConfig) (sdk.ModuleInstance, error) {
+				return newGenericModule(n, typeName, protoToMap(cfg)), nil
 			}).CreateTypedModule(typeName, name, config)
 	case "platform.ecs":
 		return sdk.NewTypedModuleFactory(typeName, &platformv1.ECSConfig{},
-			func(n string, _ *platformv1.ECSConfig) (sdk.ModuleInstance, error) {
-				return newGenericModule(n, typeName, nil), nil
+			func(n string, cfg *platformv1.ECSConfig) (sdk.ModuleInstance, error) {
+				return newGenericModule(n, typeName, protoToMap(cfg)), nil
 			}).CreateTypedModule(typeName, name, config)
 	case "platform.dns":
 		return sdk.NewTypedModuleFactory(typeName, &platformv1.DNSConfig{},
-			func(n string, _ *platformv1.DNSConfig) (sdk.ModuleInstance, error) {
-				return newGenericModule(n, typeName, nil), nil
+			func(n string, cfg *platformv1.DNSConfig) (sdk.ModuleInstance, error) {
+				return newGenericModule(n, typeName, protoToMap(cfg)), nil
 			}).CreateTypedModule(typeName, name, config)
 	case "platform.networking":
 		return sdk.NewTypedModuleFactory(typeName, &platformv1.NetworkingConfig{},
-			func(n string, _ *platformv1.NetworkingConfig) (sdk.ModuleInstance, error) {
-				return newGenericModule(n, typeName, nil), nil
+			func(n string, cfg *platformv1.NetworkingConfig) (sdk.ModuleInstance, error) {
+				return newGenericModule(n, typeName, protoToMap(cfg)), nil
 			}).CreateTypedModule(typeName, name, config)
 	case "platform.apigateway":
 		return sdk.NewTypedModuleFactory(typeName, &platformv1.APIGatewayConfig{},
-			func(n string, _ *platformv1.APIGatewayConfig) (sdk.ModuleInstance, error) {
-				return newGenericModule(n, typeName, nil), nil
+			func(n string, cfg *platformv1.APIGatewayConfig) (sdk.ModuleInstance, error) {
+				return newGenericModule(n, typeName, protoToMap(cfg)), nil
 			}).CreateTypedModule(typeName, name, config)
 	case "platform.autoscaling":
 		return sdk.NewTypedModuleFactory(typeName, &platformv1.AutoscalingConfig{},
-			func(n string, _ *platformv1.AutoscalingConfig) (sdk.ModuleInstance, error) {
-				return newGenericModule(n, typeName, nil), nil
+			func(n string, cfg *platformv1.AutoscalingConfig) (sdk.ModuleInstance, error) {
+				return newGenericModule(n, typeName, protoToMap(cfg)), nil
 			}).CreateTypedModule(typeName, name, config)
 	case "platform.provider":
 		return sdk.NewTypedModuleFactory(typeName, &platformv1.ProviderConfig{},
-			func(n string, _ *platformv1.ProviderConfig) (sdk.ModuleInstance, error) {
-				return newGenericModule(n, typeName, nil), nil
+			func(n string, cfg *platformv1.ProviderConfig) (sdk.ModuleInstance, error) {
+				return newGenericModule(n, typeName, protoToMap(cfg)), nil
 			}).CreateTypedModule(typeName, name, config)
 	case "platform.resource":
 		return sdk.NewTypedModuleFactory(typeName, &platformv1.ResourceConfig{},
-			func(n string, _ *platformv1.ResourceConfig) (sdk.ModuleInstance, error) {
-				return newGenericModule(n, typeName, nil), nil
+			func(n string, cfg *platformv1.ResourceConfig) (sdk.ModuleInstance, error) {
+				return newGenericModule(n, typeName, protoToMap(cfg)), nil
 			}).CreateTypedModule(typeName, name, config)
 	case "platform.context":
 		return sdk.NewTypedModuleFactory(typeName, &platformv1.PlatformContextConfig{},
-			func(n string, _ *platformv1.PlatformContextConfig) (sdk.ModuleInstance, error) {
-				return newGenericModule(n, typeName, nil), nil
+			func(n string, cfg *platformv1.PlatformContextConfig) (sdk.ModuleInstance, error) {
+				return newGenericModule(n, typeName, protoToMap(cfg)), nil
 			}).CreateTypedModule(typeName, name, config)
 	case "platform.region":
 		return sdk.NewTypedModuleFactory(typeName, &platformv1.RegionConfig{},
-			func(n string, _ *platformv1.RegionConfig) (sdk.ModuleInstance, error) {
-				return newGenericModule(n, typeName, nil), nil
+			func(n string, cfg *platformv1.RegionConfig) (sdk.ModuleInstance, error) {
+				return newGenericModule(n, typeName, protoToMap(cfg)), nil
 			}).CreateTypedModule(typeName, name, config)
 	case "platform.region_router":
 		return sdk.NewTypedModuleFactory(typeName, &platformv1.RegionRouterConfig{},
-			func(n string, _ *platformv1.RegionRouterConfig) (sdk.ModuleInstance, error) {
-				return newGenericModule(n, typeName, nil), nil
+			func(n string, cfg *platformv1.RegionRouterConfig) (sdk.ModuleInstance, error) {
+				return newGenericModule(n, typeName, protoToMap(cfg)), nil
 			}).CreateTypedModule(typeName, name, config)
 	case "platform.doks":
 		return sdk.NewTypedModuleFactory(typeName, &platformv1.DOKSConfig{},
-			func(n string, _ *platformv1.DOKSConfig) (sdk.ModuleInstance, error) {
-				return newGenericModule(n, typeName, nil), nil
+			func(n string, cfg *platformv1.DOKSConfig) (sdk.ModuleInstance, error) {
+				return newGenericModule(n, typeName, protoToMap(cfg)), nil
 			}).CreateTypedModule(typeName, name, config)
 	case "platform.do_networking":
 		return sdk.NewTypedModuleFactory(typeName, &platformv1.DONetworkingConfig{},
-			func(n string, _ *platformv1.DONetworkingConfig) (sdk.ModuleInstance, error) {
-				return newGenericModule(n, typeName, nil), nil
+			func(n string, cfg *platformv1.DONetworkingConfig) (sdk.ModuleInstance, error) {
+				return newGenericModule(n, typeName, protoToMap(cfg)), nil
 			}).CreateTypedModule(typeName, name, config)
 	case "platform.do_dns":
 		return sdk.NewTypedModuleFactory(typeName, &platformv1.DODNSConfig{},
-			func(n string, _ *platformv1.DODNSConfig) (sdk.ModuleInstance, error) {
-				return newGenericModule(n, typeName, nil), nil
+			func(n string, cfg *platformv1.DODNSConfig) (sdk.ModuleInstance, error) {
+				return newGenericModule(n, typeName, protoToMap(cfg)), nil
 			}).CreateTypedModule(typeName, name, config)
 	case "platform.do_app":
 		return sdk.NewTypedModuleFactory(typeName, &platformv1.DOAppConfig{},
-			func(n string, _ *platformv1.DOAppConfig) (sdk.ModuleInstance, error) {
-				return newGenericModule(n, typeName, nil), nil
+			func(n string, cfg *platformv1.DOAppConfig) (sdk.ModuleInstance, error) {
+				return newGenericModule(n, typeName, protoToMap(cfg)), nil
 			}).CreateTypedModule(typeName, name, config)
 	case "platform.do_database":
 		return sdk.NewTypedModuleFactory(typeName, &platformv1.DODatabaseConfig{},
-			func(n string, _ *platformv1.DODatabaseConfig) (sdk.ModuleInstance, error) {
-				return newGenericModule(n, typeName, nil), nil
+			func(n string, cfg *platformv1.DODatabaseConfig) (sdk.ModuleInstance, error) {
+				return newGenericModule(n, typeName, protoToMap(cfg)), nil
 			}).CreateTypedModule(typeName, name, config)
 	case "app.container":
 		return sdk.NewTypedModuleFactory(typeName, &platformv1.ContainerConfig{},
-			func(n string, _ *platformv1.ContainerConfig) (sdk.ModuleInstance, error) {
-				return newGenericModule(n, typeName, nil), nil
+			func(n string, cfg *platformv1.ContainerConfig) (sdk.ModuleInstance, error) {
+				return newGenericModule(n, typeName, protoToMap(cfg)), nil
 			}).CreateTypedModule(typeName, name, config)
 	case "iac.state":
 		return sdk.NewTypedModuleFactory(typeName, &platformv1.IaCStateConfig{},
-			func(n string, _ *platformv1.IaCStateConfig) (sdk.ModuleInstance, error) {
-				return newIaCStateModule(n, nil), nil
+			func(n string, cfg *platformv1.IaCStateConfig) (sdk.ModuleInstance, error) {
+				return newIaCStateModule(n, protoToMap(cfg)), nil
 			}).CreateTypedModule(typeName, name, config)
 	case "argo.workflows":
 		return sdk.NewTypedModuleFactory(typeName, &platformv1.ArgoWorkflowsConfig{},
-			func(n string, _ *platformv1.ArgoWorkflowsConfig) (sdk.ModuleInstance, error) {
-				return newGenericModule(n, typeName, nil), nil
+			func(n string, cfg *platformv1.ArgoWorkflowsConfig) (sdk.ModuleInstance, error) {
+				return newGenericModule(n, typeName, protoToMap(cfg)), nil
 			}).CreateTypedModule(typeName, name, config)
 	default:
 		return nil, fmt.Errorf("%w: module type %q", sdk.ErrTypedContractNotHandled, typeName)
@@ -404,6 +436,12 @@ func (p *platformPlugin) CreateTypedStep(typeName, name string, config *anypb.An
 }
 
 // ── Typed step factory helpers ────────────────────────────────────────────────
+//
+// Each handler mirrors the output shape of genericStep.Execute so that strict
+// and legacy execution paths produce consistent results. The underlying
+// operations are still stubs (TODO) identical to the legacy path; once real
+// provisioning logic is implemented the typed handlers should be updated
+// together with genericStep.Execute.
 
 func typedPlatformTemplateStep(typeName, name string, config *anypb.Any) (sdk.StepInstance, error) {
 	return sdk.NewTypedStepFactory(
@@ -411,8 +449,15 @@ func typedPlatformTemplateStep(typeName, name string, config *anypb.Any) (sdk.St
 		&platformv1.PlatformTemplateStepConfig{},
 		&platformv1.PlatformTemplateStepInput{},
 		func(_ context.Context, req sdk.TypedStepRequest[*platformv1.PlatformTemplateStepConfig, *platformv1.PlatformTemplateStepInput]) (*sdk.TypedStepResult[*platformv1.PlatformTemplateStepOutput], error) {
+			module := ""
+			if req.Config != nil {
+				module = req.Config.GetModule()
+			}
 			return &sdk.TypedStepResult[*platformv1.PlatformTemplateStepOutput]{
-				Output: &platformv1.PlatformTemplateStepOutput{Status: "ok", Rendered: ""},
+				Output: &platformv1.PlatformTemplateStepOutput{
+					Status:   "ok",
+					Rendered: fmt.Sprintf("TODO: %s not yet implemented in external plugin; module=%s", typeName, module),
+				},
 			}, nil
 		},
 	).CreateTypedStep(typeName, name, config)
@@ -424,8 +469,16 @@ func typedK8sStep(typeName, name string, config *anypb.Any) (sdk.StepInstance, e
 		&platformv1.K8SStepConfig{},
 		&platformv1.K8SStepInput{},
 		func(_ context.Context, req sdk.TypedStepRequest[*platformv1.K8SStepConfig, *platformv1.K8SStepInput]) (*sdk.TypedStepResult[*platformv1.K8SStepOutput], error) {
+			module, resource := "", ""
+			if req.Config != nil {
+				module = req.Config.GetModule()
+				resource = req.Config.GetResource()
+			}
 			return &sdk.TypedStepResult[*platformv1.K8SStepOutput]{
-				Output: &platformv1.K8SStepOutput{Status: "ok"},
+				Output: &platformv1.K8SStepOutput{
+					Status:  "ok",
+					Message: fmt.Sprintf("TODO: %s not yet implemented in external plugin; module=%s resource=%s", typeName, module, resource),
+				},
 			}, nil
 		},
 	).CreateTypedStep(typeName, name, config)
@@ -437,8 +490,16 @@ func typedECSStep(typeName, name string, config *anypb.Any) (sdk.StepInstance, e
 		&platformv1.ECSStepConfig{},
 		&platformv1.ECSStepInput{},
 		func(_ context.Context, req sdk.TypedStepRequest[*platformv1.ECSStepConfig, *platformv1.ECSStepInput]) (*sdk.TypedStepResult[*platformv1.ECSStepOutput], error) {
+			module, service := "", ""
+			if req.Config != nil {
+				module = req.Config.GetModule()
+				service = req.Config.GetService()
+			}
 			return &sdk.TypedStepResult[*platformv1.ECSStepOutput]{
-				Output: &platformv1.ECSStepOutput{Status: "ok"},
+				Output: &platformv1.ECSStepOutput{
+					Status:  "ok",
+					Message: fmt.Sprintf("TODO: %s not yet implemented in external plugin; module=%s service=%s", typeName, module, service),
+				},
 			}, nil
 		},
 	).CreateTypedStep(typeName, name, config)
@@ -450,8 +511,16 @@ func typedIaCStep(typeName, name string, config *anypb.Any) (sdk.StepInstance, e
 		&platformv1.IaCStepConfig{},
 		&platformv1.IaCStepInput{},
 		func(_ context.Context, req sdk.TypedStepRequest[*platformv1.IaCStepConfig, *platformv1.IaCStepInput]) (*sdk.TypedStepResult[*platformv1.IaCStepOutput], error) {
+			module, resource := "", ""
+			if req.Config != nil {
+				module = req.Config.GetModule()
+				resource = req.Config.GetResource()
+			}
 			return &sdk.TypedStepResult[*platformv1.IaCStepOutput]{
-				Output: &platformv1.IaCStepOutput{Status: "ok"},
+				Output: &platformv1.IaCStepOutput{
+					Status:  "ok",
+					Message: fmt.Sprintf("TODO: %s not yet implemented in external plugin; module=%s resource=%s", typeName, module, resource),
+				},
 			}, nil
 		},
 	).CreateTypedStep(typeName, name, config)
@@ -463,8 +532,15 @@ func typedDNSStep(typeName, name string, config *anypb.Any) (sdk.StepInstance, e
 		&platformv1.DNSStepConfig{},
 		&platformv1.DNSStepInput{},
 		func(_ context.Context, req sdk.TypedStepRequest[*platformv1.DNSStepConfig, *platformv1.DNSStepInput]) (*sdk.TypedStepResult[*platformv1.DNSStepOutput], error) {
+			module := ""
+			if req.Config != nil {
+				module = req.Config.GetModule()
+			}
 			return &sdk.TypedStepResult[*platformv1.DNSStepOutput]{
-				Output: &platformv1.DNSStepOutput{Status: "ok"},
+				Output: &platformv1.DNSStepOutput{
+					Status:  "ok",
+					Message: fmt.Sprintf("TODO: %s not yet implemented in external plugin; module=%s", typeName, module),
+				},
 			}, nil
 		},
 	).CreateTypedStep(typeName, name, config)
@@ -476,8 +552,16 @@ func typedNetworkStep(typeName, name string, config *anypb.Any) (sdk.StepInstanc
 		&platformv1.NetworkStepConfig{},
 		&platformv1.NetworkStepInput{},
 		func(_ context.Context, req sdk.TypedStepRequest[*platformv1.NetworkStepConfig, *platformv1.NetworkStepInput]) (*sdk.TypedStepResult[*platformv1.NetworkStepOutput], error) {
+			module, resource := "", ""
+			if req.Config != nil {
+				module = req.Config.GetModule()
+				resource = req.Config.GetResource()
+			}
 			return &sdk.TypedStepResult[*platformv1.NetworkStepOutput]{
-				Output: &platformv1.NetworkStepOutput{Status: "ok"},
+				Output: &platformv1.NetworkStepOutput{
+					Status:  "ok",
+					Message: fmt.Sprintf("TODO: %s not yet implemented in external plugin; module=%s resource=%s", typeName, module, resource),
+				},
 			}, nil
 		},
 	).CreateTypedStep(typeName, name, config)
@@ -489,8 +573,15 @@ func typedAPIGWStep(typeName, name string, config *anypb.Any) (sdk.StepInstance,
 		&platformv1.APIGWStepConfig{},
 		&platformv1.APIGWStepInput{},
 		func(_ context.Context, req sdk.TypedStepRequest[*platformv1.APIGWStepConfig, *platformv1.APIGWStepInput]) (*sdk.TypedStepResult[*platformv1.APIGWStepOutput], error) {
+			module := ""
+			if req.Config != nil {
+				module = req.Config.GetModule()
+			}
 			return &sdk.TypedStepResult[*platformv1.APIGWStepOutput]{
-				Output: &platformv1.APIGWStepOutput{Status: "ok"},
+				Output: &platformv1.APIGWStepOutput{
+					Status:  "ok",
+					Message: fmt.Sprintf("TODO: %s not yet implemented in external plugin; module=%s", typeName, module),
+				},
 			}, nil
 		},
 	).CreateTypedStep(typeName, name, config)
@@ -502,8 +593,16 @@ func typedScalingStep(typeName, name string, config *anypb.Any) (sdk.StepInstanc
 		&platformv1.ScalingStepConfig{},
 		&platformv1.ScalingStepInput{},
 		func(_ context.Context, req sdk.TypedStepRequest[*platformv1.ScalingStepConfig, *platformv1.ScalingStepInput]) (*sdk.TypedStepResult[*platformv1.ScalingStepOutput], error) {
+			module, resource := "", ""
+			if req.Config != nil {
+				module = req.Config.GetModule()
+				resource = req.Config.GetResource()
+			}
 			return &sdk.TypedStepResult[*platformv1.ScalingStepOutput]{
-				Output: &platformv1.ScalingStepOutput{Status: "ok"},
+				Output: &platformv1.ScalingStepOutput{
+					Status:  "ok",
+					Message: fmt.Sprintf("TODO: %s not yet implemented in external plugin; module=%s resource=%s", typeName, module, resource),
+				},
 			}, nil
 		},
 	).CreateTypedStep(typeName, name, config)
@@ -515,8 +614,16 @@ func typedAppStep(typeName, name string, config *anypb.Any) (sdk.StepInstance, e
 		&platformv1.AppStepConfig{},
 		&platformv1.AppStepInput{},
 		func(_ context.Context, req sdk.TypedStepRequest[*platformv1.AppStepConfig, *platformv1.AppStepInput]) (*sdk.TypedStepResult[*platformv1.AppStepOutput], error) {
+			module, app := "", ""
+			if req.Config != nil {
+				module = req.Config.GetModule()
+				app = req.Config.GetApp()
+			}
 			return &sdk.TypedStepResult[*platformv1.AppStepOutput]{
-				Output: &platformv1.AppStepOutput{Status: "ok"},
+				Output: &platformv1.AppStepOutput{
+					Status:  "ok",
+					Message: fmt.Sprintf("TODO: %s not yet implemented in external plugin; module=%s app=%s", typeName, module, app),
+				},
 			}, nil
 		},
 	).CreateTypedStep(typeName, name, config)
@@ -528,8 +635,15 @@ func typedRegionStep(typeName, name string, config *anypb.Any) (sdk.StepInstance
 		&platformv1.RegionStepConfig{},
 		&platformv1.RegionStepInput{},
 		func(_ context.Context, req sdk.TypedStepRequest[*platformv1.RegionStepConfig, *platformv1.RegionStepInput]) (*sdk.TypedStepResult[*platformv1.RegionStepOutput], error) {
+			module := ""
+			if req.Config != nil {
+				module = req.Config.GetModule()
+			}
 			return &sdk.TypedStepResult[*platformv1.RegionStepOutput]{
-				Output: &platformv1.RegionStepOutput{Status: "ok"},
+				Output: &platformv1.RegionStepOutput{
+					Status:  "ok",
+					Message: fmt.Sprintf("TODO: %s not yet implemented in external plugin; module=%s", typeName, module),
+				},
 			}, nil
 		},
 	).CreateTypedStep(typeName, name, config)
@@ -541,8 +655,15 @@ func typedArgoStep(typeName, name string, config *anypb.Any) (sdk.StepInstance, 
 		&platformv1.ArgoStepConfig{},
 		&platformv1.ArgoStepInput{},
 		func(_ context.Context, req sdk.TypedStepRequest[*platformv1.ArgoStepConfig, *platformv1.ArgoStepInput]) (*sdk.TypedStepResult[*platformv1.ArgoStepOutput], error) {
+			module := ""
+			if req.Config != nil {
+				module = req.Config.GetModule()
+			}
 			return &sdk.TypedStepResult[*platformv1.ArgoStepOutput]{
-				Output: &platformv1.ArgoStepOutput{Status: "ok"},
+				Output: &platformv1.ArgoStepOutput{
+					Status:  "ok",
+					Message: fmt.Sprintf("TODO: %s not yet implemented in external plugin; module=%s", typeName, module),
+				},
 			}, nil
 		},
 	).CreateTypedStep(typeName, name, config)
@@ -554,8 +675,15 @@ func typedDOStep(typeName, name string, config *anypb.Any) (sdk.StepInstance, er
 		&platformv1.DOStepConfig{},
 		&platformv1.DOStepInput{},
 		func(_ context.Context, req sdk.TypedStepRequest[*platformv1.DOStepConfig, *platformv1.DOStepInput]) (*sdk.TypedStepResult[*platformv1.DOStepOutput], error) {
+			module := ""
+			if req.Config != nil {
+				module = req.Config.GetModule()
+			}
 			return &sdk.TypedStepResult[*platformv1.DOStepOutput]{
-				Output: &platformv1.DOStepOutput{Status: "ok"},
+				Output: &platformv1.DOStepOutput{
+					Status:  "ok",
+					Message: fmt.Sprintf("TODO: %s not yet implemented in external plugin; module=%s", typeName, module),
+				},
 			}, nil
 		},
 	).CreateTypedStep(typeName, name, config)
