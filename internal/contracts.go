@@ -267,19 +267,21 @@ func doCIO() cio {
 
 // protoToMap converts a proto.Message to a map[string]any using protojson so
 // typed module configs can be forwarded to the existing map-based constructors.
-func protoToMap(msg proto.Message) map[string]any {
+// UseProtoNames is set so keys are emitted in snake_case (matching the keys
+// used by the legacy map-based CreateModule path).
+func protoToMap(msg proto.Message) (map[string]any, error) {
 	if msg == nil {
-		return nil
+		return nil, nil
 	}
-	b, err := protojson.Marshal(msg)
+	b, err := protojson.MarshalOptions{UseProtoNames: true}.Marshal(msg)
 	if err != nil {
-		return nil
+		return nil, fmt.Errorf("protoToMap: marshal: %w", err)
 	}
 	var m map[string]any
 	if err := json.Unmarshal(b, &m); err != nil {
-		return nil
+		return nil, fmt.Errorf("protoToMap: unmarshal: %w", err)
 	}
-	return m
+	return m, nil
 }
 
 // ── TypedModuleProvider ───────────────────────────────────────────────────────
@@ -290,105 +292,182 @@ func (p *platformPlugin) TypedModuleTypes() []string {
 }
 
 // CreateTypedModule creates a typed module using the strict proto config.
-// The decoded proto config is converted to the map[string]any form that the
-// existing module constructors expect, ensuring typed and legacy paths behave
-// identically while the real provisioning logic is still a stub (TODO).
+// The decoded proto config is converted to the map[string]any form (using
+// snake_case proto field names via UseProtoNames) that the existing module
+// constructors expect. Config conversion errors are propagated so the plugin
+// fails fast on malformed contract data.
 func (p *platformPlugin) CreateTypedModule(typeName, name string, config *anypb.Any) (sdk.ModuleInstance, error) {
 	switch typeName {
 	case "platform.kubernetes":
 		return sdk.NewTypedModuleFactory(typeName, &platformv1.KubernetesConfig{},
 			func(n string, cfg *platformv1.KubernetesConfig) (sdk.ModuleInstance, error) {
-				return newGenericModule(n, typeName, protoToMap(cfg)), nil
+				m, err := protoToMap(cfg)
+				if err != nil {
+					return nil, err
+				}
+				return newGenericModule(n, typeName, m), nil
 			}).CreateTypedModule(typeName, name, config)
 	case "platform.ecs":
 		return sdk.NewTypedModuleFactory(typeName, &platformv1.ECSConfig{},
 			func(n string, cfg *platformv1.ECSConfig) (sdk.ModuleInstance, error) {
-				return newGenericModule(n, typeName, protoToMap(cfg)), nil
+				m, err := protoToMap(cfg)
+				if err != nil {
+					return nil, err
+				}
+				return newGenericModule(n, typeName, m), nil
 			}).CreateTypedModule(typeName, name, config)
 	case "platform.dns":
 		return sdk.NewTypedModuleFactory(typeName, &platformv1.DNSConfig{},
 			func(n string, cfg *platformv1.DNSConfig) (sdk.ModuleInstance, error) {
-				return newGenericModule(n, typeName, protoToMap(cfg)), nil
+				m, err := protoToMap(cfg)
+				if err != nil {
+					return nil, err
+				}
+				return newGenericModule(n, typeName, m), nil
 			}).CreateTypedModule(typeName, name, config)
 	case "platform.networking":
 		return sdk.NewTypedModuleFactory(typeName, &platformv1.NetworkingConfig{},
 			func(n string, cfg *platformv1.NetworkingConfig) (sdk.ModuleInstance, error) {
-				return newGenericModule(n, typeName, protoToMap(cfg)), nil
+				m, err := protoToMap(cfg)
+				if err != nil {
+					return nil, err
+				}
+				return newGenericModule(n, typeName, m), nil
 			}).CreateTypedModule(typeName, name, config)
 	case "platform.apigateway":
 		return sdk.NewTypedModuleFactory(typeName, &platformv1.APIGatewayConfig{},
 			func(n string, cfg *platformv1.APIGatewayConfig) (sdk.ModuleInstance, error) {
-				return newGenericModule(n, typeName, protoToMap(cfg)), nil
+				m, err := protoToMap(cfg)
+				if err != nil {
+					return nil, err
+				}
+				return newGenericModule(n, typeName, m), nil
 			}).CreateTypedModule(typeName, name, config)
 	case "platform.autoscaling":
 		return sdk.NewTypedModuleFactory(typeName, &platformv1.AutoscalingConfig{},
 			func(n string, cfg *platformv1.AutoscalingConfig) (sdk.ModuleInstance, error) {
-				return newGenericModule(n, typeName, protoToMap(cfg)), nil
+				m, err := protoToMap(cfg)
+				if err != nil {
+					return nil, err
+				}
+				return newGenericModule(n, typeName, m), nil
 			}).CreateTypedModule(typeName, name, config)
 	case "platform.provider":
 		return sdk.NewTypedModuleFactory(typeName, &platformv1.ProviderConfig{},
 			func(n string, cfg *platformv1.ProviderConfig) (sdk.ModuleInstance, error) {
-				return newGenericModule(n, typeName, protoToMap(cfg)), nil
+				m, err := protoToMap(cfg)
+				if err != nil {
+					return nil, err
+				}
+				return newGenericModule(n, typeName, m), nil
 			}).CreateTypedModule(typeName, name, config)
 	case "platform.resource":
 		return sdk.NewTypedModuleFactory(typeName, &platformv1.ResourceConfig{},
 			func(n string, cfg *platformv1.ResourceConfig) (sdk.ModuleInstance, error) {
-				return newGenericModule(n, typeName, protoToMap(cfg)), nil
+				m, err := protoToMap(cfg)
+				if err != nil {
+					return nil, err
+				}
+				return newGenericModule(n, typeName, m), nil
 			}).CreateTypedModule(typeName, name, config)
 	case "platform.context":
 		return sdk.NewTypedModuleFactory(typeName, &platformv1.PlatformContextConfig{},
 			func(n string, cfg *platformv1.PlatformContextConfig) (sdk.ModuleInstance, error) {
-				return newGenericModule(n, typeName, protoToMap(cfg)), nil
+				m, err := protoToMap(cfg)
+				if err != nil {
+					return nil, err
+				}
+				return newGenericModule(n, typeName, m), nil
 			}).CreateTypedModule(typeName, name, config)
 	case "platform.region":
 		return sdk.NewTypedModuleFactory(typeName, &platformv1.RegionConfig{},
 			func(n string, cfg *platformv1.RegionConfig) (sdk.ModuleInstance, error) {
-				return newGenericModule(n, typeName, protoToMap(cfg)), nil
+				m, err := protoToMap(cfg)
+				if err != nil {
+					return nil, err
+				}
+				return newGenericModule(n, typeName, m), nil
 			}).CreateTypedModule(typeName, name, config)
 	case "platform.region_router":
 		return sdk.NewTypedModuleFactory(typeName, &platformv1.RegionRouterConfig{},
 			func(n string, cfg *platformv1.RegionRouterConfig) (sdk.ModuleInstance, error) {
-				return newGenericModule(n, typeName, protoToMap(cfg)), nil
+				m, err := protoToMap(cfg)
+				if err != nil {
+					return nil, err
+				}
+				return newGenericModule(n, typeName, m), nil
 			}).CreateTypedModule(typeName, name, config)
 	case "platform.doks":
 		return sdk.NewTypedModuleFactory(typeName, &platformv1.DOKSConfig{},
 			func(n string, cfg *platformv1.DOKSConfig) (sdk.ModuleInstance, error) {
-				return newGenericModule(n, typeName, protoToMap(cfg)), nil
+				m, err := protoToMap(cfg)
+				if err != nil {
+					return nil, err
+				}
+				return newGenericModule(n, typeName, m), nil
 			}).CreateTypedModule(typeName, name, config)
 	case "platform.do_networking":
 		return sdk.NewTypedModuleFactory(typeName, &platformv1.DONetworkingConfig{},
 			func(n string, cfg *platformv1.DONetworkingConfig) (sdk.ModuleInstance, error) {
-				return newGenericModule(n, typeName, protoToMap(cfg)), nil
+				m, err := protoToMap(cfg)
+				if err != nil {
+					return nil, err
+				}
+				return newGenericModule(n, typeName, m), nil
 			}).CreateTypedModule(typeName, name, config)
 	case "platform.do_dns":
 		return sdk.NewTypedModuleFactory(typeName, &platformv1.DODNSConfig{},
 			func(n string, cfg *platformv1.DODNSConfig) (sdk.ModuleInstance, error) {
-				return newGenericModule(n, typeName, protoToMap(cfg)), nil
+				m, err := protoToMap(cfg)
+				if err != nil {
+					return nil, err
+				}
+				return newGenericModule(n, typeName, m), nil
 			}).CreateTypedModule(typeName, name, config)
 	case "platform.do_app":
 		return sdk.NewTypedModuleFactory(typeName, &platformv1.DOAppConfig{},
 			func(n string, cfg *platformv1.DOAppConfig) (sdk.ModuleInstance, error) {
-				return newGenericModule(n, typeName, protoToMap(cfg)), nil
+				m, err := protoToMap(cfg)
+				if err != nil {
+					return nil, err
+				}
+				return newGenericModule(n, typeName, m), nil
 			}).CreateTypedModule(typeName, name, config)
 	case "platform.do_database":
 		return sdk.NewTypedModuleFactory(typeName, &platformv1.DODatabaseConfig{},
 			func(n string, cfg *platformv1.DODatabaseConfig) (sdk.ModuleInstance, error) {
-				return newGenericModule(n, typeName, protoToMap(cfg)), nil
+				m, err := protoToMap(cfg)
+				if err != nil {
+					return nil, err
+				}
+				return newGenericModule(n, typeName, m), nil
 			}).CreateTypedModule(typeName, name, config)
 	case "app.container":
 		return sdk.NewTypedModuleFactory(typeName, &platformv1.ContainerConfig{},
 			func(n string, cfg *platformv1.ContainerConfig) (sdk.ModuleInstance, error) {
-				return newGenericModule(n, typeName, protoToMap(cfg)), nil
+				m, err := protoToMap(cfg)
+				if err != nil {
+					return nil, err
+				}
+				return newGenericModule(n, typeName, m), nil
 			}).CreateTypedModule(typeName, name, config)
 	case "iac.state":
 		return sdk.NewTypedModuleFactory(typeName, &platformv1.IaCStateConfig{},
 			func(n string, cfg *platformv1.IaCStateConfig) (sdk.ModuleInstance, error) {
-				return newIaCStateModule(n, protoToMap(cfg)), nil
+				m, err := protoToMap(cfg)
+				if err != nil {
+					return nil, err
+				}
+				return newIaCStateModule(n, m), nil
 			}).CreateTypedModule(typeName, name, config)
 	case "argo.workflows":
 		return sdk.NewTypedModuleFactory(typeName, &platformv1.ArgoWorkflowsConfig{},
 			func(n string, cfg *platformv1.ArgoWorkflowsConfig) (sdk.ModuleInstance, error) {
-				return newGenericModule(n, typeName, protoToMap(cfg)), nil
+				m, err := protoToMap(cfg)
+				if err != nil {
+					return nil, err
+				}
+				return newGenericModule(n, typeName, m), nil
 			}).CreateTypedModule(typeName, name, config)
 	default:
 		return nil, fmt.Errorf("%w: module type %q", sdk.ErrTypedContractNotHandled, typeName)
@@ -437,11 +516,14 @@ func (p *platformPlugin) CreateTypedStep(typeName, name string, config *anypb.An
 
 // ── Typed step factory helpers ────────────────────────────────────────────────
 //
-// Each handler mirrors the output shape of genericStep.Execute so that strict
-// and legacy execution paths produce consistent results. The underlying
-// operations are still stubs (TODO) identical to the legacy path; once real
-// provisioning logic is implemented the typed handlers should be updated
-// together with genericStep.Execute.
+// Each handler populates the typed proto output with the same Status and
+// Message the legacy genericStep.Execute returns. The proto output messages
+// use dedicated typed fields (Status, Message, etc.) rather than a generic
+// map, so the schema differs from the legacy map output (which also includes
+// step_type, module, and resource keys). Both paths convey the same
+// operational meaning. The underlying operations are still stubs (TODO)
+// identical to the legacy path; once real provisioning logic is implemented
+// the typed handlers should be updated together with genericStep.Execute.
 
 func typedPlatformTemplateStep(typeName, name string, config *anypb.Any) (sdk.StepInstance, error) {
 	return sdk.NewTypedStepFactory(
