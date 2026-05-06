@@ -1,0 +1,406 @@
+syntax = "proto3";
+
+package workflow.plugins.platform.v1;
+
+option go_package = "github.com/GoCodeAlone/workflow-plugin-platform/proto/gen/platform/v1;platformv1";
+
+// ─── Module config messages ───────────────────────────────────────────────────
+
+// KubernetesConfig is the typed config for a platform.kubernetes module.
+message KubernetesConfig {
+  string cluster_name = 1;
+  string kubeconfig_path = 2;
+  string namespace = 3;
+  string context = 4;
+  string server = 5;
+  bool in_cluster = 6;
+}
+
+// ECSConfig is the typed config for a platform.ecs module.
+message ECSConfig {
+  string region = 1;
+  string cluster = 2;
+  string profile = 3;
+  string role_arn = 4;
+}
+
+// DNSConfig is the typed config for a platform.dns module.
+message DNSConfig {
+  string provider = 1;
+  string zone = 2;
+  string api_key = 3;
+  string api_secret = 4;
+}
+
+// NetworkingConfig is the typed config for a platform.networking module.
+message NetworkingConfig {
+  string vpc_id = 1;
+  repeated string subnet_ids = 2;
+  string region = 3;
+  string provider = 4;
+}
+
+// APIGatewayConfig is the typed config for a platform.apigateway module.
+message APIGatewayConfig {
+  string provider = 1;
+  string gateway_id = 2;
+  string region = 3;
+  string stage = 4;
+}
+
+// AutoscalingConfig is the typed config for a platform.autoscaling module.
+message AutoscalingConfig {
+  string provider = 1;
+  string region = 2;
+  int32 min_capacity = 3;
+  int32 max_capacity = 4;
+}
+
+// ProviderConfig is the typed config for a platform.provider module.
+message ProviderConfig {
+  string provider = 1;
+  string region = 2;
+  string profile = 3;
+  map<string, string> credentials = 4;
+}
+
+// ResourceConfig is the typed config for a platform.resource module.
+message ResourceConfig {
+  string resource_type = 1;
+  string provider = 2;
+  string region = 3;
+  map<string, string> tags = 4;
+}
+
+// PlatformContextConfig is the typed config for a platform.context module.
+message PlatformContextConfig {
+  string environment = 1;
+  string region = 2;
+  map<string, string> vars = 3;
+}
+
+// RegionConfig is the typed config for a platform.region module.
+message RegionConfig {
+  string region = 1;
+  string provider = 2;
+  bool primary = 3;
+}
+
+// RegionRouterConfig is the typed config for a platform.region_router module.
+message RegionRouterConfig {
+  repeated string regions = 1;
+  string strategy = 2;
+  string primary_region = 3;
+}
+
+// DOKSConfig is the typed config for a platform.doks module.
+message DOKSConfig {
+  string token = 1;
+  string cluster_id = 2;
+  string region = 3;
+  string version = 4;
+}
+
+// DONetworkingConfig is the typed config for a platform.do_networking module.
+message DONetworkingConfig {
+  string token = 1;
+  string vpc_id = 2;
+  string region = 3;
+}
+
+// DODNSConfig is the typed config for a platform.do_dns module.
+message DODNSConfig {
+  string token = 1;
+  string domain = 2;
+}
+
+// DOAppConfig is the typed config for a platform.do_app module.
+message DOAppConfig {
+  string token = 1;
+  string app_id = 2;
+  string region = 3;
+}
+
+// DODatabaseConfig is the typed config for a platform.do_database module.
+message DODatabaseConfig {
+  string token = 1;
+  string cluster_id = 2;
+  string database = 3;
+  string region = 4;
+}
+
+// ContainerConfig is the typed config for an app.container module.
+message ContainerConfig {
+  string image = 1;
+  string registry = 2;
+  repeated string command = 3;
+  map<string, string> env = 4;
+  int32 port = 5;
+}
+
+// IaCStateConfig is the typed config for an iac.state module.
+message IaCStateConfig {
+  string backend = 1;
+  string bucket = 2;
+  string prefix = 3;
+  string region = 4;
+  string table = 5;
+}
+
+// ArgoWorkflowsConfig is the typed config for an argo.workflows module.
+message ArgoWorkflowsConfig {
+  string server = 1;
+  string token = 2;
+  string namespace = 3;
+  bool insecure = 4;
+}
+
+// ─── Step message groups ──────────────────────────────────────────────────────
+
+// PlatformTemplateStepConfig configures a step.platform_template step.
+message PlatformTemplateStepConfig {
+  string module = 1;
+  string template = 2;
+  map<string, string> vars = 3;
+}
+
+// PlatformTemplateStepInput is the typed input for a step.platform_template step.
+message PlatformTemplateStepInput {
+  map<string, string> vars = 1;
+}
+
+// PlatformTemplateStepOutput is the typed output for a step.platform_template step.
+message PlatformTemplateStepOutput {
+  string status = 1;
+  string rendered = 2;
+}
+
+// K8sStepConfig configures Kubernetes steps.
+message K8sStepConfig {
+  string module = 1;
+  string resource = 2;
+  string namespace = 3;
+  string manifest_path = 4;
+}
+
+// K8sStepInput is the typed input for Kubernetes steps.
+message K8sStepInput {
+  map<string, string> vars = 1;
+  string manifest = 2;
+}
+
+// K8sStepOutput is the typed output for Kubernetes steps.
+message K8sStepOutput {
+  string status = 1;
+  string message = 2;
+  map<string, string> resources = 3;
+}
+
+// ECSStepConfig configures ECS steps.
+message ECSStepConfig {
+  string module = 1;
+  string service = 2;
+  string task_definition = 3;
+  string cluster = 4;
+}
+
+// ECSStepInput is the typed input for ECS steps.
+message ECSStepInput {
+  map<string, string> vars = 1;
+  int32 desired_count = 2;
+}
+
+// ECSStepOutput is the typed output for ECS steps.
+message ECSStepOutput {
+  string status = 1;
+  string message = 2;
+  string task_arn = 3;
+}
+
+// IaCStepConfig configures IaC steps.
+message IaCStepConfig {
+  string module = 1;
+  string resource = 2;
+  string working_dir = 3;
+  map<string, string> vars = 4;
+}
+
+// IaCStepInput is the typed input for IaC steps.
+message IaCStepInput {
+  map<string, string> vars = 1;
+  bool auto_approve = 2;
+}
+
+// IaCStepOutput is the typed output for IaC steps.
+message IaCStepOutput {
+  string status = 1;
+  string message = 2;
+  map<string, string> outputs = 3;
+}
+
+// DNSStepConfig configures DNS steps.
+message DNSStepConfig {
+  string module = 1;
+  string zone = 2;
+  string record_type = 3;
+  string name = 4;
+  string value = 5;
+  int32 ttl = 6;
+}
+
+// DNSStepInput is the typed input for DNS steps.
+message DNSStepInput {
+  string name = 1;
+  string value = 2;
+}
+
+// DNSStepOutput is the typed output for DNS steps.
+message DNSStepOutput {
+  string status = 1;
+  string record_id = 2;
+  string message = 3;
+}
+
+// NetworkStepConfig configures networking steps.
+message NetworkStepConfig {
+  string module = 1;
+  string resource = 2;
+  string vpc_id = 3;
+}
+
+// NetworkStepInput is the typed input for networking steps.
+message NetworkStepInput {
+  map<string, string> vars = 1;
+}
+
+// NetworkStepOutput is the typed output for networking steps.
+message NetworkStepOutput {
+  string status = 1;
+  string resource_id = 2;
+  string message = 3;
+}
+
+// APIGWStepConfig configures API gateway steps.
+message APIGWStepConfig {
+  string module = 1;
+  string api_id = 2;
+  string stage = 3;
+}
+
+// APIGWStepInput is the typed input for API gateway steps.
+message APIGWStepInput {
+  map<string, string> vars = 1;
+}
+
+// APIGWStepOutput is the typed output for API gateway steps.
+message APIGWStepOutput {
+  string status = 1;
+  string endpoint = 2;
+  string message = 3;
+}
+
+// ScalingStepConfig configures autoscaling steps.
+message ScalingStepConfig {
+  string module = 1;
+  string resource = 2;
+  string policy = 3;
+}
+
+// ScalingStepInput is the typed input for autoscaling steps.
+message ScalingStepInput {
+  int32 desired_capacity = 1;
+  map<string, string> vars = 2;
+}
+
+// ScalingStepOutput is the typed output for autoscaling steps.
+message ScalingStepOutput {
+  string status = 1;
+  int32 current_capacity = 2;
+  string message = 3;
+}
+
+// AppStepConfig configures application deployment steps.
+message AppStepConfig {
+  string module = 1;
+  string app = 2;
+  string image = 3;
+  string version = 4;
+}
+
+// AppStepInput is the typed input for application deployment steps.
+message AppStepInput {
+  string image = 1;
+  string version = 2;
+  map<string, string> vars = 3;
+}
+
+// AppStepOutput is the typed output for application deployment steps.
+message AppStepOutput {
+  string status = 1;
+  string deployment_id = 2;
+  string message = 3;
+}
+
+// RegionStepConfig configures multi-region steps.
+message RegionStepConfig {
+  string module = 1;
+  repeated string regions = 2;
+  string strategy = 3;
+}
+
+// RegionStepInput is the typed input for multi-region steps.
+message RegionStepInput {
+  string region = 1;
+  int32 weight = 2;
+  map<string, string> vars = 3;
+}
+
+// RegionStepOutput is the typed output for multi-region steps.
+message RegionStepOutput {
+  string status = 1;
+  map<string, string> region_statuses = 2;
+  string message = 3;
+}
+
+// ArgoStepConfig configures Argo Workflow steps.
+message ArgoStepConfig {
+  string module = 1;
+  string workflow_template = 2;
+  string namespace = 3;
+}
+
+// ArgoStepInput is the typed input for Argo Workflow steps.
+message ArgoStepInput {
+  string name = 1;
+  map<string, string> parameters = 2;
+}
+
+// ArgoStepOutput is the typed output for Argo Workflow steps.
+message ArgoStepOutput {
+  string status = 1;
+  string workflow_name = 2;
+  string message = 3;
+  repeated string logs = 4;
+}
+
+// DOStepConfig configures DigitalOcean steps.
+message DOStepConfig {
+  string module = 1;
+  string app_id = 2;
+  string component = 3;
+}
+
+// DOStepInput is the typed input for DigitalOcean steps.
+message DOStepInput {
+  string image = 1;
+  int32 instance_count = 2;
+  map<string, string> vars = 3;
+}
+
+// DOStepOutput is the typed output for DigitalOcean steps.
+message DOStepOutput {
+  string status = 1;
+  string deployment_id = 2;
+  string message = 3;
+  repeated string logs = 4;
+}
