@@ -11,5 +11,5 @@ import (
 )
 
 func main() {
-	sdk.Serve(internal.NewPlatformPlugin())
+	sdk.Serve(internal.NewPlatformPlugin(), sdk.WithBuildVersion(sdk.ResolveBuildVersion(internal.Version)))
 }
