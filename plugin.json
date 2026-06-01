@@ -1,6 +1,6 @@
 {
     "name": "workflow-plugin-platform",
-    "version": "0.1.1",
+    "version": "0.0.0",
     "description": "Platform infrastructure modules: Kubernetes, ECS, DNS, networking, API gateway, autoscaling, multi-region, DigitalOcean, iac.state, app.container",
     "author": "GoCodeAlone",
     "license": "MIT",
